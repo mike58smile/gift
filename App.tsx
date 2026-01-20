@@ -12,19 +12,19 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasKey, setHasKey] = useState(false);
 
-  // Initial load and hash listener
+  // Initial load and history listener
   useEffect(() => {
     let isActive = true;
 
-    const handleHashChange = async () => {
+    const handlePathChange = async () => {
       setIsLoading(true);
-      const hash = window.location.hash.replace('#', '');
-      const parts = hash.split('/');
+      const path = window.location.pathname;
+      const parts = path.split('/').filter(Boolean);
       
-      // Expected format: #/id/xyz or just #/
+      // Expected format: /id/xyz
       
       // If we have an ID in the path
-      if (parts.length >= 2 && parts[1]) {
+      if (parts.length >= 2 && parts[0] === 'id' && parts[1]) {
         const id = parts[1];
         setCurrentId(id);
         try {
@@ -41,7 +41,9 @@ const App: React.FC = () => {
       } else {
         // No ID, redirect to a new random ID
         const newId = generateId();
-        window.location.hash = `/id/${newId}`;
+        setCurrentId(newId);
+        setPostData(null);
+        window.history.replaceState(null, '', `/id/${newId}`);
       }
 
       if (isActive) {
@@ -54,15 +56,15 @@ const App: React.FC = () => {
     setHasKey(keyAvailable);
 
     if (keyAvailable) {
-        handleHashChange(); // Run once on mount
-        window.addEventListener('hashchange', handleHashChange);
+        handlePathChange(); // Run once on mount
+        window.addEventListener('popstate', handlePathChange);
     } else {
         setIsLoading(false);
     }
 
     return () => {
       isActive = false;
-      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handlePathChange);
     };
   }, []);
 

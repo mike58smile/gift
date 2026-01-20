@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Dict
 import os
@@ -47,5 +47,22 @@ def get_post(post_id: str):
     return _STORE[post_id]
 
 
-if os.path.isdir("dist"):
-    app.mount("/", StaticFiles(directory="dist", html=True), name="static")
+_DIST_DIR = "dist"
+_INDEX_FILE = os.path.join(_DIST_DIR, "index.html")
+
+
+@app.get("/{full_path:path}")
+def serve_spa(full_path: str):
+    if full_path.startswith("api"):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if os.path.isdir(_DIST_DIR):
+        if full_path:
+            candidate = os.path.join(_DIST_DIR, full_path)
+            if os.path.isfile(candidate):
+                return FileResponse(candidate)
+
+        if os.path.isfile(_INDEX_FILE):
+            return FileResponse(_INDEX_FILE)
+
+    raise HTTPException(status_code=404, detail="Not found")
