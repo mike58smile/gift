@@ -14,7 +14,10 @@ const App: React.FC = () => {
 
   // Initial load and hash listener
   useEffect(() => {
-    const handleHashChange = () => {
+    let isActive = true;
+
+    const handleHashChange = async () => {
+      setIsLoading(true);
       const hash = window.location.hash.replace('#', '');
       const parts = hash.split('/');
       
@@ -24,14 +27,26 @@ const App: React.FC = () => {
       if (parts.length >= 2 && parts[1]) {
         const id = parts[1];
         setCurrentId(id);
-        const saved = getPost(id);
-        setPostData(saved);
+        try {
+          const saved = await getPost(id);
+          if (isActive) {
+            setPostData(saved);
+          }
+        } catch (error) {
+          console.error('Failed to load post from service', error);
+          if (isActive) {
+            setPostData(null);
+          }
+        }
       } else {
         // No ID, redirect to a new random ID
         const newId = generateId();
         window.location.hash = `/id/${newId}`;
       }
-      setIsLoading(false);
+
+      if (isActive) {
+        setIsLoading(false);
+      }
     };
 
     // Check API Key first
@@ -46,14 +61,19 @@ const App: React.FC = () => {
     }
 
     return () => {
+      isActive = false;
       window.removeEventListener('hashchange', handleHashChange);
     };
   }, []);
 
-  const handlePostComplete = (post: ProcessedPost) => {
-    savePost(post);
-    setPostData(post);
-    // Force a re-render or ensure state update aligns with view
+  const handlePostComplete = async (post: ProcessedPost) => {
+    try {
+      await savePost(post);
+      setPostData(post);
+    } catch (error) {
+      console.error('Failed to save post to service', error);
+      alert('Failed to save. Please try again.');
+    }
   };
 
   if (!hasKey) {
@@ -90,7 +110,7 @@ const App: React.FC = () => {
       {/* Web Service Notice */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-gray-950/80 backdrop-blur-sm border-t border-gray-900 text-center z-40">
         <p className="text-[10px] text-gray-500">
-            Share the URL with anyone - they can view your creation on any device! Data is stored in the web service.
+        Share the URL with anyone - they can view your creation on any device. Data is stored in the web service.
         </p>
       </div>
     </div>

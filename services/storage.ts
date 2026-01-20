@@ -1,66 +1,33 @@
 import { ProcessedPost } from '../types';
 
-// ============================================================
-// SHARED IN-MEMORY STORE (simulates a web service/database)
-// This global store is shared across all users accessing the site
-// In a production app, this would be replaced with a real backend API
-// ============================================================
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
-// Declare global store on window object for persistence across module reloads
-declare global {
-  interface Window {
-    __SHARED_POSTS_STORE__: Record<string, ProcessedPost>;
-  }
-}
-
-// Initialize the shared store if it doesn't exist
-if (typeof window !== 'undefined' && !window.__SHARED_POSTS_STORE__) {
-  window.__SHARED_POSTS_STORE__ = {};
-}
-
-// Get the shared store
-const getSharedStore = (): Record<string, ProcessedPost> => {
-  if (typeof window !== 'undefined') {
-    return window.__SHARED_POSTS_STORE__;
-  }
-  return {};
+const buildUrl = (path: string): string => {
+  return `${API_BASE_URL}${path}`;
 };
 
-// ============================================================
-// PUBLIC API - These functions work with the shared store
-// ============================================================
-
-export const savePost = (post: ProcessedPost): void => {
-  try {
-    const store = getSharedStore();
-    store[post.id] = post;
-    console.log(`[SharedStore] Post saved with ID: ${post.id}`);
-    console.log(`[SharedStore] Total posts in store: ${Object.keys(store).length}`);
-  } catch (e) {
-    console.error("Failed to save post to shared store", e);
+const parseResponse = async <T>(response: Response): Promise<T> => {
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(text || `Request failed with status ${response.status}`);
   }
+  return response.json() as Promise<T>;
 };
 
-export const getPost = (id: string): ProcessedPost | null => {
-  try {
-    const store = getSharedStore();
-    const post = store[id] || null;
-    console.log(`[SharedStore] Fetching post ID: ${id}, Found: ${post !== null}`);
-    return post;
-  } catch (e) {
-    console.error("Failed to load post from shared store", e);
-    return null;
-  }
+export const savePost = async (post: ProcessedPost): Promise<void> => {
+  await parseResponse<{ status: string; id: string }>(
+    await fetch(buildUrl('/api/posts'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(post)
+    })
+  );
 };
 
-export const getAllPosts = (): ProcessedPost[] => {
-  try {
-    const store = getSharedStore();
-    return Object.values(store);
-  } catch (e) {
-    console.error("Failed to get all posts", e);
-    return [];
-  }
+export const getPost = async (id: string): Promise<ProcessedPost | null> => {
+  const response = await fetch(buildUrl(`/api/posts/${id}`));
+  if (response.status === 404) return null;
+  return parseResponse<ProcessedPost>(response);
 };
 
 export const generateId = (): string => {
