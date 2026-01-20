@@ -1,0 +1,7 @@
+{
+  "name": "Gemini Style Morph",
+  "description": "Transform your reality. Snap a photo, describe a style, and let Gemini AI reimagine it while analyzing the scene.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
