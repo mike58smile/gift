@@ -1,19 +1,62 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ProcessedPost } from '../types';
 
 interface PostViewProps {
   post: ProcessedPost;
+  onClear: () => void;
 }
 
-export const PostView: React.FC<PostViewProps> = ({ post }) => {
+export const PostView: React.FC<PostViewProps> = ({ post, onClear }) => {
+  const [isImageOpen, setIsImageOpen] = useState(false);
+  const pushedStateRef = useRef(false);
+
+  const openImage = () => {
+    setIsImageOpen(true);
+    if (!pushedStateRef.current) {
+      window.history.pushState({ imageModal: true }, '', window.location.href);
+      pushedStateRef.current = true;
+    }
+  };
+
+  const closeImage = () => {
+    setIsImageOpen(false);
+    if (pushedStateRef.current) {
+      pushedStateRef.current = false;
+      window.history.back();
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isImageOpen) {
+        setIsImageOpen(false);
+        pushedStateRef.current = false;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isImageOpen]);
+
   return (
     <div className="space-y-6 animate-fade-in pb-20">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onClear}
+          className="text-xs font-semibold text-gray-300 border border-gray-800 rounded-full px-3 py-1 hover:border-gray-600 hover:text-white transition-colors"
+        >
+          Clear view
+        </button>
+      </div>
+
       {/* Result Card - Image Only */}
       <div className="rounded-3xl overflow-hidden bg-gray-900 border border-gray-800 shadow-2xl">
         <img 
             src={post.transformedImage} 
             alt="Transformed" 
             className="w-full h-auto object-cover min-h-[300px]"
+            onClick={openImage}
         />
       </div>
 
@@ -32,9 +75,11 @@ export const PostView: React.FC<PostViewProps> = ({ post }) => {
           {post.outputText}
         </p>
 
-        <p className="text-gray-500 text-xs leading-relaxed">
-          Instruction: {post.outputPrompt}
-        </p>
+        {post.outputPrompt && post.outputPrompt.toLowerCase() !== 'manual' && (
+          <p className="text-gray-500 text-xs leading-relaxed">
+              Instruction: {post.outputPrompt}
+          </p>
+        )}
       </div>
 
       {/* Original Image Context */}
@@ -48,6 +93,20 @@ export const PostView: React.FC<PostViewProps> = ({ post }) => {
             />
         </div>
       </div>
+
+      {isImageOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={closeImage}
+        >
+          <img
+            src={post.transformedImage}
+            alt="Transformed full"
+            className="max-w-full max-h-full rounded-lg"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 };

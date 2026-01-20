@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Header } from './components/Header';
 import { CreatePost } from './components/CreatePost';
 import { PostView } from './components/PostView';
 import { getPost, savePost, generateId } from './services/storage';
@@ -91,8 +90,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-purple-500/30">
-      <Header />
-      
       <main className="max-w-md mx-auto px-4 py-8">
         {isLoading ? (
             <div className="flex justify-center py-20">
@@ -101,7 +98,7 @@ const App: React.FC = () => {
         ) : (
             <>
                 {postData ? (
-                    <PostView post={postData} />
+                  <PostView post={postData} onClear={() => setPostData(null)} />
                 ) : (
                     <CreatePost id={currentId} onComplete={handlePostComplete} />
                 )}

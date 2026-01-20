@@ -12,20 +12,18 @@ interface CreatePostProps {
 export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [stylePrompt, setStylePrompt] = useState('');
   const [outputPrompt, setOutputPrompt] = useState('');
   const [outputLanguage, setOutputLanguage] = useState('English');
+  const [manualText, setManualText] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const languageOptions = [
     'English',
-    'Spanish',
-    'French',
-    'German',
-    'Portuguese',
-    'Hindi',
-    'Japanese'
+    'Slovak',
+    'Czech'
   ];
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,33 +43,42 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedImage || !stylePrompt.trim() || !outputPrompt.trim()) return;
+    if (!selectedImage) return;
+    if (mode === 'ai' && (!stylePrompt.trim() || !outputPrompt.trim())) return;
+    if (mode === 'manual' && !manualText.trim()) return;
 
     setStatus(AppStatus.GENERATING);
     setErrorMsg(null);
 
     try {
-      // Execute both Gemini operations in parallel
-      const [descResult, styleResult] = await Promise.allSettled([
-        generateDescription(selectedImage, outputPrompt, outputLanguage),
-        styleImage(selectedImage, stylePrompt)
-      ]);
+      let outputText = '';
+      let transformedImage = selectedImage;
 
-      if (styleResult.status === 'rejected') {
-        throw new Error(styleResult.reason?.message || "Image styling failed");
+      if (mode === 'ai') {
+        // Execute both Gemini operations in parallel
+        const [descResult, styleResult] = await Promise.allSettled([
+          generateDescription(selectedImage, outputPrompt, outputLanguage),
+          styleImage(selectedImage, stylePrompt)
+        ]);
+
+        if (styleResult.status === 'rejected') {
+          throw new Error(styleResult.reason?.message || "Image styling failed");
+        }
+        
+        outputText = descResult.status === 'fulfilled' ? descResult.value : "Output unavailable.";
+        transformedImage = styleResult.value;
+      } else {
+        outputText = manualText.trim();
       }
-      
-      const outputText = descResult.status === 'fulfilled' ? descResult.value : "Output unavailable.";
-      const transformedImage = styleResult.value;
 
       const newPost: ProcessedPost = {
         id,
         originalImage: selectedImage,
         transformedImage,
         outputText,
-        outputPrompt,
-        outputLanguage,
-        stylePrompt,
+        outputPrompt: mode === 'ai' ? outputPrompt : 'Manual',
+        outputLanguage: mode === 'ai' ? outputLanguage : 'Manual',
+        stylePrompt: mode === 'ai' ? stylePrompt : 'Original',
         timestamp: Date.now()
       };
 
@@ -149,6 +156,35 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
       {/* Prompt Input */}
       {selectedImage && (
         <div className="space-y-4 animate-fade-in">
+            <div className="flex gap-2">
+                <button
+                    type="button"
+                    onClick={() => setMode('ai')}
+                    className={
+                        `flex-1 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ` +
+                        (mode === 'ai'
+                            ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                            : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+                    }
+                >
+                    AI mode
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMode('manual')}
+                    className={
+                        `flex-1 px-3 py-2 rounded-xl text-xs font-semibold border transition-all ` +
+                        (mode === 'manual'
+                            ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                            : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+                    }
+                >
+                    Manual mode
+                </button>
+            </div>
+
+            {mode === 'ai' ? (
+            <>
             <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
                 <textarea
               value={stylePrompt}
@@ -187,6 +223,17 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
               className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[90px]"
             />
           </div>
+            </>
+            ) : (
+            <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
+                <textarea
+                    value={manualText}
+                    onChange={(e) => setManualText(e.target.value)}
+                    placeholder="Write the text to display with the image"
+                    className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[120px]"
+                />
+            </div>
+            )}
             
             {errorMsg && (
                 <div className="p-4 bg-red-900/20 border border-red-500/20 rounded-xl text-red-200 text-sm">
@@ -194,7 +241,7 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
                 </div>
             )}
 
-            <Button onClick={handleSubmit} disabled={!stylePrompt.trim() || !outputPrompt.trim()}>
+            <Button onClick={handleSubmit} disabled={mode === 'ai' ? (!stylePrompt.trim() || !outputPrompt.trim()) : !manualText.trim()}>
                 Transform Reality
             </Button>
         </div>
