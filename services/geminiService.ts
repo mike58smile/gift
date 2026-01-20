@@ -9,7 +9,11 @@ export const checkApiKey = (): boolean => {
   return !!apiKey;
 };
 
-export const generateDescription = async (base64Image: string): Promise<string> => {
+export const generateDescription = async (
+  base64Image: string,
+  instruction: string,
+  language: string
+): Promise<string> => {
   try {
     const model = 'gemini-3-flash-preview';
     
@@ -24,16 +28,16 @@ export const generateDescription = async (base64Image: string): Promise<string> 
             }
           },
           {
-            text: "Describe specifically what is in this picture. Be detailed about objects, colors, and setting. Keep it under 200 words."
+            text: `Follow this instruction for the image content: "${instruction}". Respond in ${language}. Keep it under 200 words.`
           }
         ]
       }
     });
 
-    return response.text || "No description available.";
+    return response.text || "No output available.";
   } catch (error) {
-    console.error("Error generating description:", error);
-    return "Failed to generate description.";
+    console.error("Error generating text output:", error);
+    return "Failed to generate output.";
   }
 };
 

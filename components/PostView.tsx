@@ -19,14 +19,21 @@ export const PostView: React.FC<PostViewProps> = ({ post }) => {
 
       {/* Details Section - Moved outside image */}
       <div className="px-2 space-y-4">
-        <div>
-            <span className="inline-block px-3 py-1 text-xs font-bold tracking-wider text-purple-300 uppercase bg-purple-900/20 rounded-full border border-purple-500/30">
-                Start: {post.stylePrompt}
-            </span>
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-block px-3 py-1 text-xs font-bold tracking-wider text-purple-300 uppercase bg-purple-900/20 rounded-full border border-purple-500/30">
+            Style: {post.stylePrompt}
+          </span>
+          <span className="inline-block px-3 py-1 text-xs font-bold tracking-wider text-indigo-200 uppercase bg-indigo-900/20 rounded-full border border-indigo-500/30">
+            Output: {post.outputLanguage}
+          </span>
         </div>
-        
+
         <p className="text-gray-300 text-base leading-relaxed">
-            {post.description}
+          {post.outputText}
+        </p>
+
+        <p className="text-gray-500 text-xs leading-relaxed">
+          Instruction: {post.outputPrompt}
         </p>
       </div>
 

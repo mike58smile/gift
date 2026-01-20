@@ -10,7 +10,9 @@ class ProcessedPost(BaseModel):
     id: str
     originalImage: str
     transformedImage: str
-    description: str
+    outputText: str
+    outputPrompt: str
+    outputLanguage: str
     stylePrompt: str
     timestamp: int
 

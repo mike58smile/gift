@@ -2,7 +2,9 @@ export interface ProcessedPost {
   id: string;
   originalImage: string; // Base64
   transformedImage: string; // Base64
-  description: string;
+  outputText: string;
+  outputPrompt: string;
+  outputLanguage: string;
   stylePrompt: string;
   timestamp: number;
 }
@@ -17,5 +19,5 @@ export enum AppStatus {
 
 export interface GenerationResult {
   transformedImage: string;
-  description: string;
+  outputText: string;
 }

@@ -12,9 +12,21 @@ interface CreatePostProps {
 export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState('');
+  const [stylePrompt, setStylePrompt] = useState('');
+  const [outputPrompt, setOutputPrompt] = useState('');
+  const [outputLanguage, setOutputLanguage] = useState('English');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const languageOptions = [
+    'English',
+    'Spanish',
+    'French',
+    'German',
+    'Portuguese',
+    'Hindi',
+    'Japanese'
+  ];
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -33,7 +45,7 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedImage || !prompt.trim()) return;
+    if (!selectedImage || !stylePrompt.trim() || !outputPrompt.trim()) return;
 
     setStatus(AppStatus.GENERATING);
     setErrorMsg(null);
@@ -41,23 +53,25 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
     try {
       // Execute both Gemini operations in parallel
       const [descResult, styleResult] = await Promise.allSettled([
-        generateDescription(selectedImage),
-        styleImage(selectedImage, prompt)
+        generateDescription(selectedImage, outputPrompt, outputLanguage),
+        styleImage(selectedImage, stylePrompt)
       ]);
 
       if (styleResult.status === 'rejected') {
         throw new Error(styleResult.reason?.message || "Image styling failed");
       }
       
-      const description = descResult.status === 'fulfilled' ? descResult.value : "Description unavailable.";
+      const outputText = descResult.status === 'fulfilled' ? descResult.value : "Output unavailable.";
       const transformedImage = styleResult.value;
 
       const newPost: ProcessedPost = {
         id,
         originalImage: selectedImage,
         transformedImage,
-        description,
-        stylePrompt: prompt,
+        outputText,
+        outputPrompt,
+        outputLanguage,
+        stylePrompt,
         timestamp: Date.now()
       };
 
@@ -137,12 +151,42 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
         <div className="space-y-4 animate-fade-in">
             <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
                 <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
+              value={stylePrompt}
+              onChange={(e) => setStylePrompt(e.target.value)}
                     placeholder="Describe the style (e.g., 'Cyberpunk city', 'Oil painting by Van Gogh', 'Made of Lego')"
                     className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[100px]"
                 />
             </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Language</label>
+            <div className="flex flex-wrap gap-2">
+              {languageOptions.map((lang) => (
+                <button
+                  key={lang}
+                  type="button"
+                  onClick={() => setOutputLanguage(lang)}
+                  className={
+                    `px-3 py-1 rounded-full text-xs font-semibold border transition-all ` +
+                    (outputLanguage === lang
+                      ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                      : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+                  }
+                >
+                  {lang}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
+            <textarea
+              value={outputPrompt}
+              onChange={(e) => setOutputPrompt(e.target.value)}
+              placeholder="Tell Gemini how to write the text (e.g., 'Sarcastically describe the scene', 'Write a short plot for this scene')"
+              className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[90px]"
+            />
+          </div>
             
             {errorMsg && (
                 <div className="p-4 bg-red-900/20 border border-red-500/20 rounded-xl text-red-200 text-sm">
@@ -150,7 +194,7 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
                 </div>
             )}
 
-            <Button onClick={handleSubmit} disabled={!prompt.trim()}>
+            <Button onClick={handleSubmit} disabled={!stylePrompt.trim() || !outputPrompt.trim()}>
                 Transform Reality
             </Button>
         </div>
