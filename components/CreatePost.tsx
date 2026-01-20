@@ -17,6 +17,8 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
   const [outputPrompt, setOutputPrompt] = useState('');
   const [outputLanguage, setOutputLanguage] = useState('English');
   const [manualText, setManualText] = useState('');
+  const [useTransformedForDescription, setUseTransformedForDescription] = useState(false);
+  const [minimalView, setMinimalView] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,18 +57,18 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
       let transformedImage = selectedImage;
 
       if (mode === 'ai') {
-        // Execute both Gemini operations in parallel
-        const [descResult, styleResult] = await Promise.allSettled([
-          generateDescription(selectedImage, outputPrompt, outputLanguage),
-          styleImage(selectedImage, stylePrompt)
-        ]);
+        // First generate the styled image
+        const styleResult = await styleImage(selectedImage, stylePrompt);
+        transformedImage = styleResult;
 
-        if (styleResult.status === 'rejected') {
-          throw new Error(styleResult.reason?.message || "Image styling failed");
-        }
+        // Use transformed or original image for description based on toggle
+        const imageForDescription = useTransformedForDescription ? transformedImage : selectedImage;
         
-        outputText = descResult.status === 'fulfilled' ? descResult.value : "Output unavailable.";
-        transformedImage = styleResult.value;
+        try {
+          outputText = await generateDescription(imageForDescription, outputPrompt, outputLanguage);
+        } catch {
+          outputText = "Output unavailable.";
+        }
       } else {
         outputText = manualText.trim();
       }
@@ -79,7 +81,8 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
         outputPrompt: mode === 'ai' ? outputPrompt : 'Manual',
         outputLanguage: mode === 'ai' ? outputLanguage : 'Manual',
         stylePrompt: mode === 'ai' ? stylePrompt : 'Original',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        minimalView
       };
 
       onComplete(newPost);
@@ -223,8 +226,39 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
               className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[90px]"
             />
           </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Options</label>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setUseTransformedForDescription(!useTransformedForDescription)}
+                className={
+                  `px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
+                  (useTransformedForDescription
+                    ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                    : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+                }
+              >
+                Use transformed image for description
+              </button>
+              <button
+                type="button"
+                onClick={() => setMinimalView(!minimalView)}
+                className={
+                  `px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
+                  (minimalView
+                    ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                    : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+                }
+              >
+                Minimal view (hide extra elements)
+              </button>
+            </div>
+          </div>
             </>
             ) : (
+            <>
             <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
                 <textarea
                     value={manualText}
@@ -233,6 +267,19 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
                     className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[120px]"
                 />
             </div>
+            <button
+                type="button"
+                onClick={() => setMinimalView(!minimalView)}
+                className={
+                  `px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
+                  (minimalView
+                    ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                    : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+                }
+              >
+                Minimal view (hide extra elements)
+              </button>
+            </>
             )}
             
             {errorMsg && (

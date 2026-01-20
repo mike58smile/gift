@@ -7,6 +7,7 @@ export interface ProcessedPost {
   outputLanguage: string;
   stylePrompt: string;
   timestamp: number;
+  minimalView?: boolean;
 }
 
 export enum AppStatus {

@@ -15,6 +15,7 @@ class ProcessedPost(BaseModel):
     outputLanguage: str
     stylePrompt: str
     timestamp: int
+    minimalView: bool = False
 
 
 app = FastAPI(title="Gemini Style Morph Service")
