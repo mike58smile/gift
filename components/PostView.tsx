@@ -1,14 +1,72 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ProcessedPost } from '../types';
+import { generateSpeech } from '../services/ttsService';
 
 interface PostViewProps {
   post: ProcessedPost;
   onClear: () => void;
+  autoNarrate?: boolean;
 }
 
-export const PostView: React.FC<PostViewProps> = ({ post, onClear }) => {
+export const PostView: React.FC<PostViewProps> = ({ post, onClear, autoNarrate = false }) => {
   const [isImageOpen, setIsImageOpen] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const pushedStateRef = useRef(false);
+  const hasLoadedRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  // Fetch audio immediately when post changes
+  useEffect(() => {
+    // Reset state for new post
+    setAudioUrl(null);
+    hasLoadedRef.current = false;
+    setIsPlaying(false);
+    
+    if (post.outputText) {
+        setIsLoadingAudio(true);
+        generateSpeech(post.outputText)
+            .then(url => {
+                if (isMountedRef.current) {
+                    setAudioUrl(url);
+                    hasLoadedRef.current = true;
+                } else {
+                    URL.revokeObjectURL(url);
+                }
+            })
+            .catch(err => console.error("Audio generation error:", err))
+            .finally(() => {
+                if (isMountedRef.current) setIsLoadingAudio(false);
+            });
+    }
+  }, [post.outputText]);
+
+  const handlePlay = () => {
+    if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(e => console.error("Manual playback error", e));
+    }
+  };
+
+  const handleStop = () => {
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+    }
+  };
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [audioUrl]);
 
   const openImage = () => {
     setIsImageOpen(true);
@@ -78,6 +136,33 @@ export const PostView: React.FC<PostViewProps> = ({ post, onClear }) => {
         <p className="text-gray-300 text-base leading-relaxed">
           {post.outputText}
         </p>
+
+        {/* TTS Play Button */}
+        {post.outputText && (
+          <div className="flex flex-col gap-3">
+            {/* Hidden native audio element for simpler control */}
+            {audioUrl && (
+                <audio
+                    ref={audioRef}
+                    src={audioUrl}
+                    autoPlay={autoNarrate}
+                    controls={true}
+                    className="w-full h-10 mt-2"
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={() => setIsPlaying(false)}
+                />
+            )}
+            
+            {/* Loading Indicator if no URL yet */}
+            {isLoadingAudio && !audioUrl && (
+                 <div className="flex items-center gap-2 text-indigo-300 text-sm animate-pulse">
+                    <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
+                    Generating narration...
+                 </div>
+            )}
+          </div>
+        )}
 
         {!post.minimalView && post.outputPrompt && post.outputPrompt.toLowerCase() !== 'manual' && (
           <p className="text-gray-500 text-xs leading-relaxed">

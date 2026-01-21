@@ -81,12 +81,6 @@ export const PromptCapture: React.FC<PromptCaptureProps> = ({ id, prompt, onComp
         <p className="text-gray-400 text-sm">Take a photo to generate content</p>
       </div>
 
-      {/* Prompt display */}
-      <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Prompt</p>
-        <p className="text-gray-200 text-sm">{decodedPrompt}</p>
-      </div>
-
       {/* Image Capture */}
       <div 
         onClick={() => fileInputRef.current?.click()}

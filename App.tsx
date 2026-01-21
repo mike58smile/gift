@@ -117,7 +117,7 @@ const App: React.FC = () => {
         ) : (
             <>
                 {postData ? (
-                  <PostView post={postData} onClear={() => setPostData(null)} />
+                  <PostView post={postData} onClear={() => setPostData(null)} autoNarrate={true} />
                 ) : urlPrompt ? (
                     <PromptCapture id={currentId} prompt={urlPrompt} onComplete={handlePostComplete} />
                 ) : (

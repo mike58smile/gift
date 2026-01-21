@@ -1,9 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import Dict
 import os
+import httpx
+from dotenv import load_dotenv
+
+# Load environment variables from .env.local
+load_dotenv(".env.local")
 
 
 class ProcessedPost(BaseModel):
@@ -16,6 +21,11 @@ class ProcessedPost(BaseModel):
     stylePrompt: str
     timestamp: int
     minimalView: bool = False
+
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "alloy"
 
 
 app = FastAPI(title="Gemini Style Morph Service")
@@ -48,6 +58,40 @@ def get_post(post_id: str):
     if post_id not in _STORE:
         raise HTTPException(status_code=404, detail="Post not found")
     return _STORE[post_id]
+
+
+@app.post("/api/tts")
+async def text_to_speech(req: TTSRequest):
+    openai_key = os.environ.get("OPENAI_API_KEY")
+    if not openai_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="Text is required")
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={
+                "Authorization": f"Bearer {openai_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "tts-1",
+                "input": req.text,
+                "voice": req.voice
+            },
+            timeout=60.0
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="TTS generation failed")
+        
+        return Response(
+            content=response.content,
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "inline; filename=speech.mp3"}
+        )
 
 
 _DIST_DIR = "dist"
