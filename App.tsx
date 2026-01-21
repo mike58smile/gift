@@ -89,8 +89,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-purple-500/30">
-      <main className="max-w-md mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-purple-500/30 flex flex-col">
+      <main className="max-w-md mx-auto px-4 py-8 flex-1">
         {isLoading ? (
             <div className="flex justify-center py-20">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
@@ -106,11 +106,16 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Web Service Notice */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gray-950/80 backdrop-blur-sm border-t border-gray-900 text-center z-40">
-        <p className="text-[10px] text-gray-500">
-        Share the URL with anyone - they can view your creation on any device. Data is stored in the web service.
-        </p>
+      {/* Footer */}
+      <div className="p-4 bg-gray-950/80 border-t border-gray-900 text-center">
+        <a
+          href="https://mike58smile.github.io/surprise/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-base text-indigo-400 hover:text-indigo-300 underline underline-offset-2 transition-colors"
+        >
+          {postData?.outputLanguage === 'Slovak' ? 'Otázky? Klikni sem!' : postData?.outputLanguage === 'Czech' ? 'Otázky? Klikni sem!' : 'Questions? Click here!'}
+        </a>
       </div>
     </div>
   );
