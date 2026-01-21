@@ -3,6 +3,7 @@ import { Button } from './Button';
 import { compressImage } from '../services/imageUtils';
 import { generateDescription, styleImage } from '../services/geminiService';
 import { AppStatus, ProcessedPost } from '../types';
+import { ImageCompare } from './ImageCompare';
 
 interface CreatePostProps {
   id: string;
@@ -17,10 +18,15 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
   const [outputPrompt, setOutputPrompt] = useState('');
   const [outputLanguage, setOutputLanguage] = useState('English');
   const [manualText, setManualText] = useState('');
+  const [includeText, setIncludeText] = useState(false);
   const [useTransformedForDescription, setUseTransformedForDescription] = useState(false);
-  const [minimalView, setMinimalView] = useState(false);
+  const [minimalView, setMinimalView] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Compare page state
+  const [showCompare, setShowCompare] = useState(false);
+  const [transformedImage, setTransformedImage] = useState<string | null>(null);
 
   const languageOptions = [
     'English',
@@ -46,54 +52,130 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
 
   const handleSubmit = async () => {
     if (!selectedImage) return;
-    if (mode === 'ai' && (!stylePrompt.trim() || !outputPrompt.trim())) return;
-    if (mode === 'manual' && !manualText.trim()) return;
+    
+    if (mode === 'manual') {
+      if (!manualText.trim()) return;
+      // Manual mode - go straight to show page
+      const newPost: ProcessedPost = {
+        id,
+        originalImage: selectedImage,
+        transformedImage: selectedImage,
+        outputText: manualText.trim(),
+        outputPrompt: 'Manual',
+        outputLanguage: 'Manual',
+        stylePrompt: 'Original',
+        timestamp: Date.now(),
+        minimalView
+      };
+      onComplete(newPost);
+      return;
+    }
 
+    // AI mode
+    if (!stylePrompt.trim()) {
+      // No style prompt - use image as is
+      if (includeText && outputPrompt.trim()) {
+        // Generate text only
+        setStatus(AppStatus.GENERATING);
+        setErrorMsg(null);
+        try {
+          const outputText = await generateDescription(selectedImage, outputPrompt, outputLanguage);
+          const newPost: ProcessedPost = {
+            id,
+            originalImage: selectedImage,
+            transformedImage: selectedImage,
+            outputText,
+            outputPrompt,
+            outputLanguage,
+            stylePrompt: 'Original',
+            timestamp: Date.now(),
+            minimalView
+          };
+          onComplete(newPost);
+        } catch (err: any) {
+          setErrorMsg(err.message || "Failed to generate text.");
+          setStatus(AppStatus.ERROR);
+        }
+      } else {
+        // No style, no text - just use original for show page
+        const newPost: ProcessedPost = {
+          id,
+          originalImage: selectedImage,
+          transformedImage: selectedImage,
+          outputText: '',
+          outputPrompt: 'None',
+          outputLanguage: 'None',
+          stylePrompt: 'Original',
+          timestamp: Date.now(),
+          minimalView
+        };
+        onComplete(newPost);
+      }
+      return;
+    }
+
+    // Has style prompt - generate image
     setStatus(AppStatus.GENERATING);
     setErrorMsg(null);
 
     try {
-      let outputText = '';
-      let transformedImage = selectedImage;
+      const newTransformed = await styleImage(selectedImage, stylePrompt);
 
-      if (mode === 'ai') {
-        // First generate the styled image
-        const styleResult = await styleImage(selectedImage, stylePrompt);
-        transformedImage = styleResult;
-
-        // Use transformed or original image for description based on toggle
-        const imageForDescription = useTransformedForDescription ? transformedImage : selectedImage;
-        
+      if (includeText && outputPrompt.trim()) {
+        // Generate text too and go to show page
+        const imageForDescription = useTransformedForDescription ? newTransformed : selectedImage;
+        let outputText = '';
         try {
           outputText = await generateDescription(imageForDescription, outputPrompt, outputLanguage);
         } catch {
           outputText = "Output unavailable.";
         }
+
+        const newPost: ProcessedPost = {
+          id,
+          originalImage: selectedImage,
+          transformedImage: newTransformed,
+          outputText,
+          outputPrompt,
+          outputLanguage,
+          stylePrompt,
+          timestamp: Date.now(),
+          minimalView
+        };
+        onComplete(newPost);
       } else {
-        outputText = manualText.trim();
+        // No text - go to compare page
+        setTransformedImage(newTransformed);
+        setShowCompare(true);
+        setStatus(AppStatus.IDLE);
       }
-
-      const newPost: ProcessedPost = {
-        id,
-        originalImage: selectedImage,
-        transformedImage,
-        outputText,
-        outputPrompt: mode === 'ai' ? outputPrompt : 'Manual',
-        outputLanguage: mode === 'ai' ? outputLanguage : 'Manual',
-        stylePrompt: mode === 'ai' ? stylePrompt : 'Original',
-        timestamp: Date.now(),
-        minimalView
-      };
-
-      onComplete(newPost);
-      setStatus(AppStatus.COMPLETE);
-
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Something went wrong with the AI generation.");
       setStatus(AppStatus.ERROR);
     }
   };
+
+  const handleRestart = () => {
+    setShowCompare(false);
+    setTransformedImage(null);
+    setStylePrompt('');
+    setOutputPrompt('');
+    setIncludeText(false);
+  };
+
+  // Show compare page
+  if (showCompare && selectedImage && transformedImage) {
+    return (
+      <ImageCompare
+        id={id}
+        originalImage={selectedImage}
+        transformedImage={transformedImage}
+        onComplete={onComplete}
+        onRestart={handleRestart}
+      />
+    );
+  }
 
   if (status === AppStatus.GENERATING) {
     return (
@@ -109,14 +191,14 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
             Gemini is Dreaming
         </h2>
         <p className="text-gray-400 max-w-xs">
-            Analyzing your photo and reimagining it in your requested style...
+            {includeText ? 'Generating image and text...' : 'Generating styled image...'}
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 animate-fade-in pb-24">
+    <div className="space-y-6 animate-fade-in pb-24 w-full">
       <div className="text-center space-y-2 mb-8">
         <h2 className="text-3xl font-bold text-white">Create Magic</h2>
         <p className="text-gray-400">Capture a moment, give it a style.</p>
@@ -158,7 +240,7 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
 
       {/* Prompt Input */}
       {selectedImage && (
-        <div className="space-y-4 animate-fade-in">
+        <div className="space-y-4 animate-fade-in w-full">
             <div className="flex gap-2">
                 <button
                     type="button"
@@ -190,72 +272,87 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
             <>
             <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
                 <textarea
-              value={stylePrompt}
-              onChange={(e) => setStylePrompt(e.target.value)}
-                    placeholder="Describe the style (e.g., 'Cyberpunk city', 'Oil painting by Van Gogh', 'Made of Lego')"
-                    className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[100px]"
+                  value={stylePrompt}
+                  onChange={(e) => setStylePrompt(e.target.value)}
+                  placeholder="Describe the style (leave empty to use original image)"
+                  className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[80px]"
                 />
             </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Language</label>
-            <div className="flex flex-wrap gap-2">
-              {languageOptions.map((lang) => (
+            {/* Include text toggle */}
+            <button
+              type="button"
+              onClick={() => setIncludeText(!includeText)}
+              className={
+                `w-full px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
+                (includeText
+                  ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                  : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+              }
+            >
+              Include text generation
+            </button>
+
+            {includeText && (
+              <div className="space-y-4 animate-fade-in w-full">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Language</label>
+                  <div className="flex flex-wrap gap-2">
+                    {languageOptions.map((lang) => (
+                      <button
+                        key={lang}
+                        type="button"
+                        onClick={() => setOutputLanguage(lang)}
+                        className={
+                          `px-3 py-1 rounded-full text-xs font-semibold border transition-all ` +
+                          (outputLanguage === lang
+                            ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                            : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+                        }
+                      >
+                        {lang}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
+                  <textarea
+                    value={outputPrompt}
+                    onChange={(e) => setOutputPrompt(e.target.value)}
+                    placeholder="Tell Gemini how to write the text"
+                    className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[80px]"
+                  />
+                </div>
+
                 <button
-                  key={lang}
                   type="button"
-                  onClick={() => setOutputLanguage(lang)}
+                  onClick={() => setUseTransformedForDescription(!useTransformedForDescription)}
                   className={
-                    `px-3 py-1 rounded-full text-xs font-semibold border transition-all ` +
-                    (outputLanguage === lang
+                    `w-full px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
+                    (useTransformedForDescription
                       ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
                       : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
                   }
                 >
-                  {lang}
+                  Use transformed image for description
                 </button>
-              ))}
-            </div>
-          </div>
+              </div>
+            )}
 
-          <div className="bg-gray-900/50 p-1 rounded-2xl border border-gray-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
-            <textarea
-              value={outputPrompt}
-              onChange={(e) => setOutputPrompt(e.target.value)}
-              placeholder="Tell Gemini how to write the text (e.g., 'Sarcastically describe the scene', 'Write a short plot for this scene')"
-              className="w-full bg-transparent border-none text-white placeholder-gray-500 p-4 focus:ring-0 resize-none min-h-[90px]"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Options</label>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => setUseTransformedForDescription(!useTransformedForDescription)}
-                className={
-                  `px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
-                  (useTransformedForDescription
-                    ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
-                    : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
-                }
-              >
-                Use transformed image for description
-              </button>
-              <button
-                type="button"
-                onClick={() => setMinimalView(!minimalView)}
-                className={
-                  `px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
-                  (minimalView
-                    ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
-                    : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
-                }
-              >
-                Minimal view (hide extra elements)
-              </button>
-            </div>
-          </div>
+            {/* Minimal view option */}
+            <button
+              type="button"
+              onClick={() => setMinimalView(!minimalView)}
+              className={
+                `w-full px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
+                (minimalView
+                  ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
+                  : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
+              }
+            >
+              Minimal view (hide extra elements)
+            </button>
             </>
             ) : (
             <>
@@ -271,7 +368,7 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
                 type="button"
                 onClick={() => setMinimalView(!minimalView)}
                 className={
-                  `px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
+                  `w-full px-3 py-2 rounded-xl text-xs font-semibold border transition-all text-left ` +
                   (minimalView
                     ? 'bg-indigo-500/20 text-indigo-200 border-indigo-400/50'
                     : 'bg-gray-900/40 text-gray-400 border-gray-800 hover:border-gray-700')
@@ -288,8 +385,12 @@ export const CreatePost: React.FC<CreatePostProps> = ({ id, onComplete }) => {
                 </div>
             )}
 
-            <Button onClick={handleSubmit} disabled={mode === 'ai' ? (!stylePrompt.trim() || !outputPrompt.trim()) : !manualText.trim()}>
-                Transform Reality
+            <Button onClick={handleSubmit} disabled={mode === 'manual' && !manualText.trim()}>
+                {mode === 'ai' 
+                  ? (stylePrompt.trim() 
+                      ? (includeText && outputPrompt.trim() ? 'Generate All' : 'Generate Image') 
+                      : (includeText && outputPrompt.trim() ? 'Generate Text' : 'Use Original'))
+                  : 'Create Post'}
             </Button>
         </div>
       )}
