@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CreatePost } from './components/CreatePost';
 import { PostView } from './components/PostView';
+import { PromptCapture } from './components/PromptCapture';
 import { getPost, savePost, generateId } from './services/storage';
 import { ProcessedPost } from './types';
 import { checkApiKey } from './services/geminiService';
@@ -10,6 +11,7 @@ const App: React.FC = () => {
   const [postData, setPostData] = useState<ProcessedPost | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasKey, setHasKey] = useState(false);
+  const [urlPrompt, setUrlPrompt] = useState<string | null>(null);
 
   // Initial load and history listener
   useEffect(() => {
@@ -17,13 +19,30 @@ const App: React.FC = () => {
 
     const handlePathChange = async () => {
       setIsLoading(true);
+      setUrlPrompt(null);
       const path = window.location.pathname;
       const parts = path.split('/').filter(Boolean);
       
-      // Expected format: /id/xyz
-      
-      // If we have an ID in the path
-      if (parts.length >= 2 && parts[0] === 'id' && parts[1]) {
+      // Check for /:prompt/id/:id format (3 parts: prompt, "id", actualId)
+      if (parts.length >= 3 && parts[1] === 'id' && parts[2]) {
+        const prompt = decodeURIComponent(parts[0]);
+        const id = parts[2];
+        setCurrentId(id);
+        setUrlPrompt(prompt);
+        try {
+          const saved = await getPost(id);
+          if (isActive) {
+            setPostData(saved);
+          }
+        } catch (error) {
+          console.error('Failed to load post from service', error);
+          if (isActive) {
+            setPostData(null);
+          }
+        }
+      }
+      // Check for /id/:id format (2 parts)
+      else if (parts.length >= 2 && parts[0] === 'id' && parts[1]) {
         const id = parts[1];
         setCurrentId(id);
         try {
@@ -99,6 +118,8 @@ const App: React.FC = () => {
             <>
                 {postData ? (
                   <PostView post={postData} onClear={() => setPostData(null)} />
+                ) : urlPrompt ? (
+                    <PromptCapture id={currentId} prompt={urlPrompt} onComplete={handlePostComplete} />
                 ) : (
                     <CreatePost id={currentId} onComplete={handlePostComplete} />
                 )}
